@@ -9,10 +9,8 @@ import (
 	"github.com/lamnetu/ufaru-go/domain"
 )
 
-// userAgent — идентификация краулера.
-const userAgent = "UfaruBot/1.0 (+https://github.com/lamnetu/ufaru-go)"
+const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
 
-// resolveURL превращает относительный URL в абсолютный.
 func resolveURL(base, ref string) string {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
@@ -29,7 +27,6 @@ func resolveURL(base, ref string) string {
 	return b.ResolveReference(r).String()
 }
 
-// ruMonths — маппинг русских месяцев в английские для time.Parse.
 var ruMonths = map[string]string{
 	"января":   "January",
 	"февраля":  "February",
@@ -45,7 +42,6 @@ var ruMonths = map[string]string{
 	"декабря":  "December",
 }
 
-// parseRuDate парсит русские даты типа "26 ноября 2026, 14:30".
 func parseRuDate(raw string) (time.Time, bool) {
 	s := strings.ToLower(raw)
 	for ru, en := range ruMonths {
@@ -65,7 +61,6 @@ func parseRuDate(raw string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseUfa1Date парсит формат ufa1: "26 ноября, 2026, 19:40" (время уфимское, UTC+5).
 func parseUfa1Date(raw string) (time.Time, bool) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	for ru, en := range ruMonths {
@@ -85,7 +80,6 @@ func parseUfa1Date(raw string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// parseRelativeDate обрабатывает относительные даты типа "5 минут назад".
 func parseRelativeDate(raw string) (time.Time, bool) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	now := time.Now().UTC()
@@ -103,14 +97,12 @@ func parseRelativeDate(raw string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// extractNum вытаскивает первое число из строки.
 func extractNum(s string) int {
 	var n int
 	_, _ = fmt.Sscanf(s, "%d", &n)
 	return n
 }
 
-// parseUfa1Category маппит русские рубрики ufa1 в domain.Category.
 func parseUfa1Category(raw string) domain.Category {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "экономика":

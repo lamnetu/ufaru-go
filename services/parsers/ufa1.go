@@ -132,16 +132,11 @@ func (p *Ufa1) parseNewsDetail(url string) (string, error) {
 		err        error
 	)
 
-	p.detailCollector.OnHTML(ufa1DetailBodySel, func(e *colly.HTMLElement) {
-		// Ищем все текстовые блоки
-		e.DOM.Find(ufa1DetailTextSel).Each(func(_ int, s *colly.HTMLElement) {
-			// Удаляем мусор внутри блока
-			s.DOM.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv']").Remove()
-			text := strings.TrimSpace(s.Text)
-			if text != "" && len(text) > 20 {
-				paragraphs = append(paragraphs, text)
-			}
-		})
+	p.detailCollector.OnHTML(ufa1DetailTextSel, func(e *colly.HTMLElement) {
+		text := strings.TrimSpace(e.Text) // здесь e.Text — поле colly, без скобок
+		if text != "" && len(text) > 20 {
+			paragraphs = append(paragraphs, text)
+		}
 	})
 
 	p.detailCollector.OnError(func(_ *colly.Response, e error) {

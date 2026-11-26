@@ -85,6 +85,8 @@ func main() {
 	hourlyCount++
 	dailyCount++
 
+	log.Printf("[main] after svc.Run(ctx) hourlyCount=%d, dailyCount=%d", hourlyCount, dailyCount)
+
 	for {
 		select {
 		case <-ctx.Done():

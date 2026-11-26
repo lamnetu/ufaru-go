@@ -1,0 +1,7 @@
+.git
+.env*
+!.env.example
+bin/ tmp/ vendor/
+.idea .vscode
+*.md
+Dockerfile* compose*.yaml .dockerignore

@@ -1,2 +1,3 @@
-module ufa-parser
+module github.com/lamnetu/ufaru-go
+
 go 1.23

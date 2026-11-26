@@ -17,7 +17,7 @@ const (
 	ufa1Timeout  = 20 * time.Second
 )
 
-// Селекторы ленты (реальный HTML /text/).
+// Селекторы ленты.
 const (
 	ufa1ListSel        = "div.announcementList_6xAkH > div.wrap_RL97A"
 	ufa1TitleSel       = "a.header_RL97A"
@@ -28,14 +28,12 @@ const (
 	ufa1CategorySel    = "a.rubric_fQns7"
 )
 
-// Селекторы детальной страницы (фолбэки — точный селектор зависит от вёрстки).
-var ufa1DetailBodySelectors = []string{
-	"div.article-body",
-	"div.content_RL97A",
-	"article",
-	"[data-page='TYPE_ARTICLE'] .article-content",
-	".text-block",
-}
+// Селекторы детальной страницы (из реального HTML 26.11.2026).
+const (
+	ufa1DetailBodySel = "div#articleBody.articleContent_gZi6Y"
+	ufa1DetailTextSel = "div.uiArticleBlockText_yPBA9[data-article-block-text]"
+	ufa1DetailImgSel  = "div.articleBlockImage_odoam img.image_jQVQ9"
+)
 
 type Ufa1 struct {
 	collector       *colly.Collector
@@ -100,8 +98,7 @@ func (p *Ufa1) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 			}
 		}
 
-		// SENIOR NOTE: ходим на детальную страницу за полным текстом.
-		// Rate limit 300ms между запросами — не долбим источник.
+		// Ходим на детальную за полным текстом.
 		time.Sleep(300 * time.Millisecond)
 		if body, err := p.parseNewsDetail(link); err != nil {
 			errs = append(errs, fmt.Errorf("detail parse %s: %w", link, err))
@@ -126,27 +123,25 @@ func (p *Ufa1) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 	return news, nil
 }
 
-// parseNewsDetail извлекает полный текст одной статьи с детальной страницы.
-// SENIOR NOTE: пробуем несколько селекторов по порядку, берём первый непустой.
+// parseNewsDetail извлекает полный текст статьи с детальной страницы ufa1.
+// SENIOR NOTE: текст разбит на блоки div.uiArticleBlockText_yPBA9[data-article-block-text],
+// каждый содержит <p>. Собираем все параграфы в один текст.
 func (p *Ufa1) parseNewsDetail(url string) (string, error) {
-	var body string
-	var err error
+	var (
+		paragraphs []string
+		err        error
+	)
 
-	p.detailCollector.OnHTML("", func(e *colly.HTMLElement) {
-		// Перебираем селекторы, ищем первый непустой контейнер
-		for _, sel := range ufa1DetailBodySelectors {
-			el := e.DOM.Find(sel).First()
-			if el.Length() == 0 {
-				continue
+	p.detailCollector.OnHTML(ufa1DetailBodySel, func(e *colly.HTMLElement) {
+		// Ищем все текстовые блоки
+		e.DOM.Find(ufa1DetailTextSel).Each(func(_ int, s *colly.HTMLElement) {
+			// Удаляем мусор внутри блока
+			s.DOM.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv']").Remove()
+			text := strings.TrimSpace(s.Text)
+			if text != "" && len(text) > 20 {
+				paragraphs = append(paragraphs, text)
 			}
-			// Удаляем мусор
-			el.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv']").Remove()
-			text := strings.TrimSpace(el.Text())
-			if text != "" && len(text) > 100 {
-				body = text
-				return
-			}
-		}
+		})
 	})
 
 	p.detailCollector.OnError(func(_ *colly.Response, e error) {
@@ -159,8 +154,8 @@ func (p *Ufa1) parseNewsDetail(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if body == "" {
+	if len(paragraphs) == 0 {
 		return "", fmt.Errorf("empty body for %s", url)
 	}
-	return body, nil
+	return strings.Join(paragraphs, "\n\n"), nil
 }

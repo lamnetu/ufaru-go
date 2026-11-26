@@ -17,8 +17,7 @@ const (
 	prufyTimeout  = 20 * time.Second
 )
 
-// Селекторы под Bitrix-вёрстку. ВАЖНО: без BX-заголовков страница приходит
-// пустой (контент грузится динамическими блоками bxdynamic_*).
+// Селекторы ленты Bitrix.
 const (
 	prufyItemSel        = "div.news-item"
 	prufyTitleSel       = "a.news-title"
@@ -28,14 +27,15 @@ const (
 	prufyDateSel        = "span.news-date"
 )
 
-// Селекторы детальной страницы prufy (фолбэки).
-var prufyDetailBodySelectors = []string{
-	"div.detail_text",
-	"div.article-body",
-	"article",
-	".news-detail-content",
-	".content",
-}
+// Селекторы детальной страницы prufy (из реального HTML 26.11.2026).
+const (
+	prufyDetailBodySel = "div.news-text-full"
+	prufyDetailTextSel = "div.news-text"
+	prufyDetailTitle   = "h1.header-details"
+	prufyDetailDate    = "span.date-details"
+	prufyDetailAuthor  = "span.author-name a"
+	prufyDetailLead    = "p.prew-text"
+)
 
 type Prufy struct {
 	collector       *colly.Collector
@@ -51,8 +51,7 @@ func NewPrufy() *Prufy {
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})
 
-	// SENIOR NOTE: Bitrix composite cache. Без этих заголовков сервер
-	// отдаёт страницу с пустыми плейсхолдерами bxdynamic_*.
+	// Bitrix composite cache — без этих заголовков страница придёт пустой.
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
 		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")
@@ -112,7 +111,7 @@ func (p *Prufy) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 			}
 		}
 
-		// Ходим на детальную за полным текстом
+		// Ходим на детальную за полным текстом.
 		time.Sleep(300 * time.Millisecond)
 		if body, err := p.parseNewsDetail(link); err != nil {
 			errs = append(errs, fmt.Errorf("detail parse %s: %w", link, err))
@@ -137,24 +136,24 @@ func (p *Prufy) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 	return news, nil
 }
 
-// parseNewsDetail извлекает полный текст одной статьи с детальной страницы.
+// parseNewsDetail извлекает полный текст статьи с детальной страницы prufy.
+// SENIOR NOTE: текст лежит в div.news-text внутри div.news-text-full.
+// Bitrix отдаёт HTML с <p>, <h2>, <img> — берём innerHTML, чистим от рекламы.
 func (p *Prufy) parseNewsDetail(url string) (string, error) {
-	var body string
-	var err error
+	var (
+		body string
+		err  error
+	)
 
-	p.detailCollector.OnHTML("", func(e *colly.HTMLElement) {
-		for _, sel := range prufyDetailBodySelectors {
-			el := e.DOM.Find(sel).First()
-			if el.Length() == 0 {
-				continue
-			}
-			el.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv']").Remove()
-			text := strings.TrimSpace(el.Text())
-			if text != "" && len(text) > 100 {
-				body = text
-				return
-			}
+	p.detailCollector.OnHTML(prufyDetailBodySel, func(e *colly.HTMLElement) {
+		textBlock := e.DOM.Find(prufyDetailTextSel).First()
+		if textBlock.Length() == 0 {
+			return
 		}
+		// Удаляем мусор: реклама, комментарии, "читайте также", соцсети
+		textBlock.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv'], .readmore, .article-tags, .tolstoy, .recomend, .podelitsa, .ya-share2, .all-news, .news-lenta, #Tolstoy, #smi24, #adfox_162463494964389116, #adfox_162463498674745378, #adfox_162918969521962546").Remove()
+		html, _ := textBlock.Html()
+		body = strings.TrimSpace(html)
 	})
 
 	p.detailCollector.OnError(func(_ *colly.Response, e error) {

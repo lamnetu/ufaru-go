@@ -17,8 +17,16 @@ func NewConsole() *Console { return &Console{} }
 func (c *Console) Handle(_ context.Context, evt event.Event) {
 	switch e := evt.(type) {
 	case *event.NewsParsedEvent:
-		fmt.Printf("[console] parsed: %s | %s | %s\n", e.News.Title, e.News.URL, e.News.Content)
+		fmt.Printf("[console] parsed: %s | %s | %s\n", e.News.Title, e.News.URL, truncateRunes(e.News.Content, 100))
 	case *event.NewsParseFailedEvent:
 		fmt.Printf("[console] FAILED: source=%s type=%s msg=%s\n", e.Source, e.ErrorType, e.Message)
 	}
+}
+
+func truncateRunes(s string, n int) string {
+	runes := []rune(s)
+	if len(runes) > n {
+		return string(runes[:n])
+	}
+	return s
 }

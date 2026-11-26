@@ -1,0 +1,8 @@
+akhq:
+  server:
+    access-log:
+      enabled: false
+  connections:
+    docker-kafka-server:
+      properties:
+        bootstrap.servers: "kafka:9092"

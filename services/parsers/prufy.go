@@ -14,9 +14,11 @@ import (
 const (
 	prufyName     = "prufy"
 	prufyStartURL = "https://prufy.ru/news/"
-	prufyTimeout  = 15 * time.Second
+	prufyTimeout  = 20 * time.Second
 )
 
+// Селекторы под Bitrix-верстку prufy.ru.
+// ВАЖНО: без заголовка BX-ACTION-TYPE=get_dynamic страница придёт пустой.
 const (
 	prufyItemSel        = "div.news-item"
 	prufyTitleSel       = "a.news-title"
@@ -33,20 +35,25 @@ type Prufy struct {
 func NewPrufy() *Prufy {
 	c := colly.NewCollector(
 		colly.MaxDepth(1),
-		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"),
+		colly.UserAgent(userAgent),
 		colly.AllowURLRevisit(),
 	)
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})
+
+	// SENIOR NOTE: Bitrix composite cache. Без этих заголовков сервер
+	// отдаёт страницу с пустыми плейсхолдерами bxdynamic_*.
+	// Заголовки эмулируют AJAX-запрос, который делает сам сайт в браузере.
+	c.OnRequest(func(r *colly.Request) {
+		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
+		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")
+	})
 
 	return &Prufy{collector: c}
 }
 
 func (p *Prufy) Name() string { return prufyName }
 
-// Parse обходит ленту prufy.ru.
-// SENIOR NOTE: resolveURL переиспользуется из ufa1.go — оба файла в пакете parsers,
-// поэтому хелпер доступен без импорта. Это и есть смысл общего пакета.
 func (p *Prufy) Parse(ctx context.Context) ([]*domain.News, error) {
 	var (
 		news []*domain.News
@@ -75,11 +82,9 @@ func (p *Prufy) Parse(ctx context.Context) ([]*domain.News, error) {
 		}
 
 		if raw := strings.TrimSpace(e.ChildText(prufyDateSel)); raw != "" {
-			// prufy часто пишет относительные даты ("2 часа назад"),
-			// поэтому сначала пробуем относительную, потом абсолютную.
-			if t, ok := parseRelativeDate(raw); ok {
+			if t, ok := parseRuDate(raw); ok {
 				item.PublishedAt = t
-			} else if t, ok := parseRuDate(raw); ok {
+			} else if t, ok := parseRelativeDate(raw); ok {
 				item.PublishedAt = t
 			}
 		}
@@ -99,33 +104,4 @@ func (p *Prufy) Parse(ctx context.Context) ([]*domain.News, error) {
 		return nil, errors.Join(errs...)
 	}
 	return news, nil
-}
-
-// parseRelativeDate обрабатывает относительные даты prufy:
-// "5 минут назад", "2 часа назад", "вчера", "сегодня".
-// SENIOR NOTE: относительная дата = now минус дельта. time.Now() берём в UTC,
-// чтобы PublishedAt был согласован с остальными источниками.
-func parseRelativeDate(raw string) (time.Time, bool) {
-	s := strings.ToLower(strings.TrimSpace(raw))
-	now := time.Now().UTC()
-
-	switch {
-	case strings.Contains(s, "минут"):
-		return now.Add(-time.Duration(extractNum(s)) * time.Minute), true
-	case strings.Contains(s, "час"):
-		return now.Add(-time.Duration(extractNum(s)) * time.Hour), true
-	case strings.Contains(s, "вчера"):
-		return now.Add(-24 * time.Hour), true
-	case strings.Contains(s, "сегодня"):
-		return now, true
-	}
-	return time.Time{}, false
-}
-
-// extractNum вытасывает первое число из строки ("2 часа назад" -> 2).
-// Если числа нет, возвращает 0 (Sscanf не находит совпадение).
-func extractNum(s string) int {
-	var n int
-	_, _ = fmt.Sscanf(s, "%d", &n)
-	return n
 }

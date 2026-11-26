@@ -28,18 +28,10 @@ func resolveURL(base, ref string) string {
 }
 
 var ruMonths = map[string]string{
-	"января":   "January",
-	"февраля":  "February",
-	"марта":    "March",
-	"апреля":   "April",
-	"мая":      "May",
-	"июня":     "June",
-	"июля":     "July",
-	"августа":  "August",
-	"сентября": "September",
-	"октября":  "October",
-	"ноября":   "November",
-	"декабря":  "December",
+	"января": "January", "февраля": "February", "марта": "March",
+	"апреля": "April", "мая": "May", "июня": "June",
+	"июля": "July", "августа": "August", "сентября": "September",
+	"октября": "October", "ноября": "November", "декабря": "December",
 }
 
 func parseRuDate(raw string) (time.Time, bool) {
@@ -67,7 +59,6 @@ func parseUfa1Date(raw string) (time.Time, bool) {
 		s = strings.ReplaceAll(s, ru, en)
 	}
 	s = strings.ReplaceAll(s, ",", "")
-
 	for _, layout := range []string{
 		"2 January 2006 15:04",
 		"02 January 2006 15:04",
@@ -83,12 +74,11 @@ func parseUfa1Date(raw string) (time.Time, bool) {
 func parseRelativeDate(raw string) (time.Time, bool) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	now := time.Now().UTC()
-
 	switch {
 	case strings.Contains(s, "минут"):
-		return now.Add(-time.Duration(extractNum(s)) * time.Minute), true
+		return now.Add(-time.Duration(extractNumber(s)) * time.Minute), true
 	case strings.Contains(s, "час"):
-		return now.Add(-time.Duration(extractNum(s)) * time.Hour), true
+		return now.Add(-time.Duration(extractNumber(s)) * time.Hour), true
 	case strings.Contains(s, "вчера"):
 		return now.Add(-24 * time.Hour), true
 	case strings.Contains(s, "сегодня"):
@@ -97,7 +87,7 @@ func parseRelativeDate(raw string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func extractNum(s string) int {
+func extractNumber(s string) int {
 	var n int
 	_, _ = fmt.Sscanf(s, "%d", &n)
 	return n

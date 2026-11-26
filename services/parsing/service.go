@@ -37,7 +37,7 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 func (s *Service) parseOne(ctx context.Context, p parsers.Parser) {
-	news, err := p.Parse(ctx)
+	news, err := p.ParseNewsList(ctx)
 	if err != nil {
 		s.bus.Publish(ctx, &event.NewsParseFailedEvent{
 			Source:     domain.Source(p.Name()),

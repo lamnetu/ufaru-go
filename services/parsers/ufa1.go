@@ -17,7 +17,7 @@ const (
 	ufa1Timeout  = 20 * time.Second
 )
 
-// Селекторы по реальному HTML ленты /text/ (из дампа 26.11.2026).
+// Селекторы ленты (реальный HTML /text/).
 const (
 	ufa1ListSel        = "div.announcementList_6xAkH > div.wrap_RL97A"
 	ufa1TitleSel       = "a.header_RL97A"
@@ -28,8 +28,12 @@ const (
 	ufa1CategorySel    = "a.rubric_fQns7"
 )
 
+// Селектор тела статьи на детальной странице.
+const ufa1ArticleBodySel = "div.article-body, div.content_RL97A, article"
+
 type Ufa1 struct {
-	collector *colly.Collector
+	collector       *colly.Collector
+	detailCollector *colly.Collector
 }
 
 func NewUfa1() *Ufa1 {
@@ -41,12 +45,19 @@ func NewUfa1() *Ufa1 {
 	c.SetRequestTimeout(ufa1Timeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "ufa1.ru"})
 
-	return &Ufa1{collector: c}
+	dc := colly.NewCollector(
+		colly.MaxDepth(0),
+		colly.UserAgent(userAgent),
+	)
+	dc.SetRequestTimeout(ufa1Timeout)
+	_ = dc.Limit(&colly.LimitRule{DomainGlob: "ufa1.ru"})
+
+	return &Ufa1{collector: c, detailCollector: dc}
 }
 
 func (p *Ufa1) Name() string { return ufa1Name }
 
-func (p *Ufa1) Parse(ctx context.Context) ([]*domain.News, error) {
+func (p *Ufa1) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 	var (
 		news []*domain.News
 		errs []error
@@ -80,6 +91,15 @@ func (p *Ufa1) Parse(ctx context.Context) ([]*domain.News, error) {
 			}
 		}
 
+		// Обогащение: ходим на детальную за полным текстом.
+		// Rate limit 300ms между запросами — не долбим источник.
+		time.Sleep(300 * time.Millisecond)
+		if body, err := p.parseNewsDetail(link); err != nil {
+			errs = append(errs, fmt.Errorf("detail parse %s: %w", link, err))
+		} else {
+			item.Content = body
+		}
+
 		news = append(news, item)
 	})
 
@@ -95,4 +115,32 @@ func (p *Ufa1) Parse(ctx context.Context) ([]*domain.News, error) {
 		return nil, errors.Join(errs...)
 	}
 	return news, nil
+}
+
+// parseNewsDetail извлекает полный текст одной статьи с детальной страницы.
+func (p *Ufa1) parseNewsDetail(url string) (string, error) {
+	var (
+		body string
+		err  error
+	)
+
+	p.detailCollector.OnHTML(ufa1ArticleBodySel, func(e *colly.HTMLElement) {
+		e.DOM.Find("script, style, iframe, noscript, .advert, [data-ad-unit]").Remove()
+		body = strings.TrimSpace(e.Text)
+	})
+
+	p.detailCollector.OnError(func(_ *colly.Response, e error) {
+		err = e
+	})
+
+	if e := p.detailCollector.Visit(url); e != nil {
+		return "", e
+	}
+	if err != nil {
+		return "", err
+	}
+	if body == "" {
+		return "", fmt.Errorf("empty body for %s", url)
+	}
+	return body, nil
 }

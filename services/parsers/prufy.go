@@ -17,9 +17,8 @@ const (
 	prufyTimeout  = 20 * time.Second
 )
 
-// Селекторы под Bitrix-верстку prufy.ru.
-// ВАЖНО: без заголовка BX-ACTION-TYPE=get_dynamic страница придёт пустой
-// (Bitrix composite cache подгружает контент AJAX'ом).
+// Селекторы под Bitrix-вёрстку. ВАЖНО: без BX-заголовков страница приходит
+// пустой (контент грузится динамическими блоками bxdynamic_*).
 const (
 	prufyItemSel        = "div.news-item"
 	prufyTitleSel       = "a.news-title"
@@ -42,8 +41,6 @@ func NewPrufy() *Prufy {
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})
 
-	// SENIOR NOTE: Bitrix composite cache. Без этих заголовков сервер
-	// отдаёт страницу с пустыми плейсхолдерами bxdynamic_*.
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
 		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")
@@ -54,7 +51,7 @@ func NewPrufy() *Prufy {
 
 func (p *Prufy) Name() string { return prufyName }
 
-func (p *Prufy) Parse(ctx context.Context) ([]*domain.News, error) {
+func (p *Prufy) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 	var (
 		news []*domain.News
 		errs []error

@@ -27,13 +27,13 @@ const (
 type News struct {
 	Title       string
 	Description string
-	Content     string // полный текст статьи
-	URL         string // ссылка на первоисточник
+	Content     string
+	URL         string
 	ImageURL    string
 	Source      Source
 	Category    Category
-	PublishedAt time.Time // дата публикации на источнике
-	ParsedAt    time.Time // дата парсинга нами
+	PublishedAt time.Time
+	ParsedAt    time.Time
 }
 
 // Valid — доменное правило: новость можно публиковать,

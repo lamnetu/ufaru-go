@@ -1,5 +1,5 @@
 
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata
@@ -22,8 +22,5 @@ COPY --from=builder /parser .
 
 USER app
 EXPOSE 8081
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
-    CMD wget -qO- http://127.0.0.1:8081/healthz || exit 1
 
 ENTRYPOINT ["./parser"]

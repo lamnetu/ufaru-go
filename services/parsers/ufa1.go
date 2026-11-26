@@ -17,7 +17,7 @@ const (
 	ufa1Timeout  = 20 * time.Second
 )
 
-// Селекторы по реальному HTML ленты /text/.
+// Селекторы по реальному HTML ленты /text/ (из дампа 26.11.2026).
 const (
 	ufa1ListSel        = "div.announcementList_6xAkH > div.wrap_RL97A"
 	ufa1TitleSel       = "a.header_RL97A"
@@ -95,45 +95,4 @@ func (p *Ufa1) Parse(ctx context.Context) ([]*domain.News, error) {
 		return nil, errors.Join(errs...)
 	}
 	return news, nil
-}
-
-// parseUfa1Date парсит "26 ноября, 2026, 19:40" (время уфимское, UTC+5).
-func parseUfa1Date(raw string) (time.Time, bool) {
-	s := strings.ToLower(strings.TrimSpace(raw))
-	for ru, en := range ruMonths {
-		s = strings.ReplaceAll(s, ru, en)
-	}
-	s = strings.ReplaceAll(s, ",", "")
-
-	for _, layout := range []string{
-		"2 January 2006 15:04",
-		"02 January 2006 15:04",
-	} {
-		if t, err := time.Parse(layout, s); err == nil {
-			ufa := time.FixedZone("UFA", 5*3600)
-			return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, ufa).UTC(), true
-		}
-	}
-	return time.Time{}, false
-}
-
-// parseUfa1Category маппит русские рубрики ufa1 в domain.Category.
-// ufa1 использует "Происшествия", "Культура" и т.д. — нужно свести к нашему enum.
-func parseUfa1Category(raw string) domain.Category {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "экономика":
-		return domain.CategoryEconomy
-	case "политика":
-		return domain.CategoryPolitics
-	case "спорт":
-		return domain.CategorySport
-	case "культура":
-		return domain.CategoryCulture
-	case "происшествия", "криминал":
-		return domain.CategoryIncidents
-	case "город":
-		return domain.CategoryCity
-	default:
-		return ""
-	}
 }

@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,35 +23,97 @@ func main() {
 
 	bus := eventbus.New()
 
-	console := publishers.NewConsole()
-	rest := publishers.NewRest(
-		getEnv("API_ENDPOINT", "http://symfony:80/api/internal/news"),
-		getEnv("API_KEY", ""),
-	)
+	// Читаем env
+	enabledPublishers := strings.Split(getEnv("ENABLED_PUBLISHERS", "console"), ",")
+	kafkaBrokers := strings.Split(getEnv("KAFKA_BROKERS", "kafka:9092"), ",")
+	kafkaTopic := getEnv("KAFKA_TOPIC", "news_parsed")
+	kafkaTopicFailed := getEnv("KAFKA_TOPIC_FAILED", "news_parse_failed")
 
-	// Подписки: образец типа определяет, на какое событие реагирует handler.
-	bus.Subscribe(&event.NewsParsedEvent{}, console.Handle)
-	bus.Subscribe(&event.NewsParsedEvent{}, rest.Handle)
-	bus.Subscribe(&event.NewsParseFailedEvent{}, console.Handle)
+	var closers []interface{ Close() error }
 
-	log.Println("Start parsing")
+	for _, name := range enabledPublishers {
+		name = strings.TrimSpace(name)
+		switch name {
+		case "console":
+			console := publishers.NewConsole()
+			bus.Subscribe(&event.NewsParsedEvent{}, console.Handle)
+			bus.Subscribe(&event.NewsParseFailedEvent{}, console.Handle)
+			log.Println("[main] enabled publisher: console")
+
+		case "kafka":
+			kafka, err := publishers.NewKafka(kafkaBrokers, kafkaTopic, kafkaTopicFailed)
+			if err != nil {
+				log.Fatalf("[main] kafka init: %v", err)
+			}
+			bus.Subscribe(&event.NewsParsedEvent{}, kafka.Handle)
+			bus.Subscribe(&event.NewsParseFailedEvent{}, kafka.Handle)
+			closers = append(closers, kafka)
+			log.Println("[main] enabled publisher: kafka")
+		case "rest":
+			rest := publishers.NewRest(
+				getEnv("API_ENDPOINT", "http://symfony:80/api/internal/news"),
+				getEnv("API_KEY", ""),
+			)
+			bus.Subscribe(&event.NewsParsedEvent{}, rest.Handle)
+			bus.Subscribe(&event.NewsParseFailedEvent{}, rest.Handle)
+			log.Println("[main] enabled publisher: rest")
+		}
+	}
+
 	svc := parsing.NewService(bus, parsers.NewUfa1(), parsers.NewPrufy())
 
-	go healthServer(getEnv("HEALTH_ADDR", ":8081"))
+	interval := getDuration("PARSE_INTERVAL", 10*time.Minute)
+	maxPerHour := getInt("MAX_PARSES_PER_HOUR", 6)
+	maxPerDay := getInt("MAX_PARSES_PER_DAY", 100)
 
-	interval := getDuration("PARSE_INTERVAL", 5*time.Minute)
+	log.Printf("[main] parse interval=%s, max/hour=%d, max/day=%d", interval, maxPerHour, maxPerDay)
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	svc.Run(ctx)
+	// Rate limiter: счётчики парсинга
+	var (
+		hourlyCount int
+		dailyCount  int
+		hourReset   = time.NewTicker(1 * time.Hour)
+		dayReset    = time.NewTicker(24 * time.Hour)
+	)
+	defer hourReset.Stop()
+	defer dayReset.Stop()
+
+	svc.Run(ctx) // первый проход сразу
+	hourlyCount++
+	dailyCount++
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("shutdown")
+			log.Println("[main] shutdown")
+			for _, c := range closers {
+				c.Close()
+			}
 			return
+
+		case <-hourReset.C:
+			log.Printf("[main] hourly reset (was %d)", hourlyCount)
+			hourlyCount = 0
+
+		case <-dayReset.C:
+			log.Printf("[main] daily reset (was %d)", dailyCount)
+			dailyCount = 0
+
 		case <-ticker.C:
+			if hourlyCount >= maxPerHour {
+				log.Printf("[main] hourly limit reached (%d/%d), skipping", hourlyCount, maxPerHour)
+				continue
+			}
+			if dailyCount >= maxPerDay {
+				log.Printf("[main] daily limit reached (%d/%d), skipping", dailyCount, maxPerDay)
+				continue
+			}
 			svc.Run(ctx)
+			hourlyCount++
+			dailyCount++
 		}
 	}
 }
@@ -69,15 +132,10 @@ func getDuration(key string, def time.Duration) time.Duration {
 	return def
 }
 
-// healthServer поднимает /healthz для Docker HEALTHCHECK.
-func healthServer(addr string) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-	if err := srv.ListenAndServe(); err != nil {
-		log.Printf("health server: %v", err)
+func getInt(key string, def int) int {
+	var v int
+	if _, err := fmt.Sscanf(os.Getenv(key), "%d", &v); err == nil {
+		return v
 	}
+	return def
 }

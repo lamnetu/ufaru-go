@@ -18,7 +18,8 @@ const (
 )
 
 // Селекторы под Bitrix-верстку prufy.ru.
-// ВАЖНО: без заголовка BX-ACTION-TYPE=get_dynamic страница придёт пустой.
+// ВАЖНО: без заголовка BX-ACTION-TYPE=get_dynamic страница придёт пустой
+// (Bitrix composite cache подгружает контент AJAX'ом).
 const (
 	prufyItemSel        = "div.news-item"
 	prufyTitleSel       = "a.news-title"
@@ -43,7 +44,6 @@ func NewPrufy() *Prufy {
 
 	// SENIOR NOTE: Bitrix composite cache. Без этих заголовков сервер
 	// отдаёт страницу с пустыми плейсхолдерами bxdynamic_*.
-	// Заголовки эмулируют AJAX-запрос, который делает сам сайт в браузере.
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
 		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")

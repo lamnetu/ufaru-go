@@ -47,6 +47,7 @@ type kafkaMessage struct {
 	Type       string    `json:"type"`
 	Source     string    `json:"source,omitempty"`
 	Title      string    `json:"title,omitempty"`
+	Content    string    `json:"content,omitempty"`
 	URL        string    `json:"url,omitempty"`
 	Category   string    `json:"category,omitempty"`
 	ErrorType  string    `json:"error_type,omitempty"`
@@ -64,11 +65,11 @@ func (k *Kafka) Handle(_ context.Context, evt event.Event) {
 			Type:       "news_parsed",
 			Source:     string(e.News.Source),
 			Title:      e.News.Title,
+			Content:    e.News.Content,
 			URL:        e.News.URL,
 			Category:   string(e.News.Category),
 			OccurredAt: e.OccurredAt,
 		}
-		topic = k.topic
 
 	case *event.NewsParseFailedEvent:
 		msg = kafkaMessage{

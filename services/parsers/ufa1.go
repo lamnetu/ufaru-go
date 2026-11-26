@@ -28,8 +28,14 @@ const (
 	ufa1CategorySel    = "a.rubric_fQns7"
 )
 
-// Селектор тела статьи на детальной странице.
-const ufa1ArticleBodySel = "div.article-body, div.content_RL97A, article"
+// Селекторы детальной страницы (фолбэки — точный селектор зависит от вёрстки).
+var ufa1DetailBodySelectors = []string{
+	"div.article-body",
+	"div.content_RL97A",
+	"article",
+	"[data-page='TYPE_ARTICLE'] .article-content",
+	".text-block",
+}
 
 type Ufa1 struct {
 	collector       *colly.Collector
@@ -52,7 +58,10 @@ func NewUfa1() *Ufa1 {
 	dc.SetRequestTimeout(ufa1Timeout)
 	_ = dc.Limit(&colly.LimitRule{DomainGlob: "ufa1.ru"})
 
-	return &Ufa1{collector: c, detailCollector: dc}
+	return &Ufa1{
+		collector:       c,
+		detailCollector: dc,
+	}
 }
 
 func (p *Ufa1) Name() string { return ufa1Name }
@@ -91,7 +100,7 @@ func (p *Ufa1) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 			}
 		}
 
-		// Обогащение: ходим на детальную за полным текстом.
+		// SENIOR NOTE: ходим на детальную страницу за полным текстом.
 		// Rate limit 300ms между запросами — не долбим источник.
 		time.Sleep(300 * time.Millisecond)
 		if body, err := p.parseNewsDetail(link); err != nil {
@@ -118,15 +127,26 @@ func (p *Ufa1) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 }
 
 // parseNewsDetail извлекает полный текст одной статьи с детальной страницы.
+// SENIOR NOTE: пробуем несколько селекторов по порядку, берём первый непустой.
 func (p *Ufa1) parseNewsDetail(url string) (string, error) {
-	var (
-		body string
-		err  error
-	)
+	var body string
+	var err error
 
-	p.detailCollector.OnHTML(ufa1ArticleBodySel, func(e *colly.HTMLElement) {
-		e.DOM.Find("script, style, iframe, noscript, .advert, [data-ad-unit]").Remove()
-		body = strings.TrimSpace(e.Text)
+	p.detailCollector.OnHTML("", func(e *colly.HTMLElement) {
+		// Перебираем селекторы, ищем первый непустой контейнер
+		for _, sel := range ufa1DetailBodySelectors {
+			el := e.DOM.Find(sel).First()
+			if el.Length() == 0 {
+				continue
+			}
+			// Удаляем мусор
+			el.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv']").Remove()
+			text := strings.TrimSpace(el.Text())
+			if text != "" && len(text) > 100 {
+				body = text
+				return
+			}
+		}
 	})
 
 	p.detailCollector.OnError(func(_ *colly.Response, e error) {

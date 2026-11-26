@@ -17,7 +17,7 @@ func NewConsole() *Console { return &Console{} }
 func (c *Console) Handle(_ context.Context, evt event.Event) {
 	switch e := evt.(type) {
 	case *event.NewsParsedEvent:
-		fmt.Printf("[console] parsed: %s | %s\n", e.News.Title, e.News.URL)
+		fmt.Printf("[console] parsed: %s | %s | %s\n", e.News.Title, e.News.URL, e.News.Content)
 	case *event.NewsParseFailedEvent:
 		fmt.Printf("[console] FAILED: source=%s type=%s msg=%s\n", e.Source, e.ErrorType, e.Message)
 	}

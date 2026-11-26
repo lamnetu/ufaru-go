@@ -28,8 +28,18 @@ const (
 	prufyDateSel        = "span.news-date"
 )
 
+// Селекторы детальной страницы prufy (фолбэки).
+var prufyDetailBodySelectors = []string{
+	"div.detail_text",
+	"div.article-body",
+	"article",
+	".news-detail-content",
+	".content",
+}
+
 type Prufy struct {
-	collector *colly.Collector
+	collector       *colly.Collector
+	detailCollector *colly.Collector
 }
 
 func NewPrufy() *Prufy {
@@ -41,12 +51,28 @@ func NewPrufy() *Prufy {
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})
 
+	// SENIOR NOTE: Bitrix composite cache. Без этих заголовков сервер
+	// отдаёт страницу с пустыми плейсхолдерами bxdynamic_*.
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
 		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")
 	})
 
-	return &Prufy{collector: c}
+	dc := colly.NewCollector(
+		colly.MaxDepth(0),
+		colly.UserAgent(userAgent),
+	)
+	dc.SetRequestTimeout(prufyTimeout)
+	_ = dc.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})
+	dc.OnRequest(func(r *colly.Request) {
+		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
+		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")
+	})
+
+	return &Prufy{
+		collector:       c,
+		detailCollector: dc,
+	}
 }
 
 func (p *Prufy) Name() string { return prufyName }
@@ -86,6 +112,14 @@ func (p *Prufy) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 			}
 		}
 
+		// Ходим на детальную за полным текстом
+		time.Sleep(300 * time.Millisecond)
+		if body, err := p.parseNewsDetail(link); err != nil {
+			errs = append(errs, fmt.Errorf("detail parse %s: %w", link, err))
+		} else {
+			item.Content = body
+		}
+
 		news = append(news, item)
 	})
 
@@ -101,4 +135,40 @@ func (p *Prufy) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 		return nil, errors.Join(errs...)
 	}
 	return news, nil
+}
+
+// parseNewsDetail извлекает полный текст одной статьи с детальной страницы.
+func (p *Prufy) parseNewsDetail(url string) (string, error) {
+	var body string
+	var err error
+
+	p.detailCollector.OnHTML("", func(e *colly.HTMLElement) {
+		for _, sel := range prufyDetailBodySelectors {
+			el := e.DOM.Find(sel).First()
+			if el.Length() == 0 {
+				continue
+			}
+			el.Find("script, style, iframe, noscript, .advert, [data-ad-unit], [class*='adv']").Remove()
+			text := strings.TrimSpace(el.Text())
+			if text != "" && len(text) > 100 {
+				body = text
+				return
+			}
+		}
+	})
+
+	p.detailCollector.OnError(func(_ *colly.Response, e error) {
+		err = e
+	})
+
+	if e := p.detailCollector.Visit(url); e != nil {
+		return "", e
+	}
+	if err != nil {
+		return "", err
+	}
+	if body == "" {
+		return "", fmt.Errorf("empty body for %s", url)
+	}
+	return body, nil
 }

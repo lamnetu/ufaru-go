@@ -35,7 +35,7 @@ type Prufy struct {
 func NewPrufy() *Prufy {
 	c := colly.NewCollector(
 		colly.MaxDepth(1),
-		colly.UserAgent("CityPortalBot/1.0 (+https://github.com/lamnetu/ufaru-go)"),
+		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"),
 	)
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})

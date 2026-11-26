@@ -2,9 +2,8 @@ package parsing
 
 import (
 	"context"
+	"sync"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 
 	"github.com/lamnetu/ufaru-go/domain"
 	"github.com/lamnetu/ufaru-go/event"
@@ -12,58 +11,50 @@ import (
 	"github.com/lamnetu/ufaru-go/services/parsers"
 )
 
-// Service — application-сервис: координирует парсеры и публикует события.
-// SENIOR NOTE: знает только интерфейс parsers.Parser, не конкретные реализации.
+// Service — application-сервис: один проход по всем источникам.
 type Service struct {
-	bus     *eventbus.Bus
 	parsers []parsers.Parser
+	bus     *eventbus.Bus
 }
 
-func New(bus *eventbus.Bus, ps ...parsers.Parser) *Service {
-	return &Service{bus: bus, parsers: ps}
+func NewService(bus *eventbus.Bus, ps ...parsers.Parser) *Service {
+	return &Service{parsers: ps, bus: bus}
 }
 
-// Run запускает все парсеры параллельно и ждёт завершения.
-func (s *Service) Run(ctx context.Context) error {
-	g, ctx := errgroup.WithContext(ctx)
-
+// Run обходит все источники параллельно (горутина на парсер).
+// SENIOR NOTE: WaitGroup ждёт завершения всех; шина thread-safe,
+// поэтому Publish из разных горутин безопасен без дополнительного мьютекса.
+func (s *Service) Run(ctx context.Context) {
+	var wg sync.WaitGroup
 	for _, p := range s.parsers {
-		// SENIOR NOTE: с Go 1.22 переменная цикла создаётся заново на каждой
-		// итерации, поэтому p := p больше не нужен (раньше был классический баг).
-		g.Go(func() error {
-			return s.parseOne(ctx, p)
-		})
+		wg.Add(1)
+		go func(p parsers.Parser) {
+			defer wg.Done()
+			s.parseOne(ctx, p)
+		}(p)
 	}
-	return g.Wait()
+	wg.Wait()
 }
 
-// parseOne парсит один источник и публикует события.
-// Ошибка источника НЕ прерывает весь Run: публикуем NewsParseFailedEvent
-// и возвращаем nil, чтобы остальные источники доработали.
-func (s *Service) parseOne(ctx context.Context, p parsers.Parser) error {
+func (s *Service) parseOne(ctx context.Context, p parsers.Parser) {
 	news, err := p.Parse(ctx)
 	if err != nil {
-		et := event.ErrorTypeNetwork
-		if ctx.Err() != nil {
-			et = event.ErrorTypeTimeout
-		}
 		s.bus.Publish(ctx, &event.NewsParseFailedEvent{
 			Source:     domain.Source(p.Name()),
-			ErrorType:  et,
+			ErrorType:  event.ErrorTypeParse,
 			Message:    err.Error(),
 			OccurredAt: time.Now().UTC(),
 		})
-		return nil
+		return
 	}
 
 	for _, n := range news {
 		if !n.Valid() {
-			continue
+			continue // доменное правило: без заголовка/URL не публикуем
 		}
 		s.bus.Publish(ctx, &event.NewsParsedEvent{
 			News:       n,
 			OccurredAt: time.Now().UTC(),
 		})
 	}
-	return nil
 }

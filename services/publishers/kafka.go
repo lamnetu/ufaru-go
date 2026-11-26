@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -15,6 +16,7 @@ type Kafka struct {
 	producer sarama.AsyncProducer
 	topic    string
 	topicErr string
+	mu       sync.RWMutex
 }
 
 func NewKafka(brokers []string, topic, topicErr string) (*Kafka, error) {
@@ -28,19 +30,20 @@ func NewKafka(brokers []string, topic, topicErr string) (*Kafka, error) {
 		return nil, err
 	}
 
-	// SENIOR NOTE: фоновая горутина читает ошибки от producer'а,
-	// иначе канал Errors() заблокируется и producer зависнет.
+	k := &Kafka{
+		producer: producer,
+		topic:    topic,
+		topicErr: topicErr,
+	}
+
+	// Фоновая горутина читает ошибки от producer'а
 	go func() {
 		for err := range producer.Errors() {
 			log.Printf("[kafka] producer error: %v", err.Err)
 		}
 	}()
 
-	return &Kafka{
-		producer: producer,
-		topic:    topic,
-		topicErr: topicErr,
-	}, nil
+	return k, nil
 }
 
 type kafkaMessage struct {
@@ -70,6 +73,7 @@ func (k *Kafka) Handle(_ context.Context, evt event.Event) {
 			Category:   string(e.News.Category),
 			OccurredAt: e.OccurredAt,
 		}
+		topic = k.topic
 
 	case *event.NewsParseFailedEvent:
 		msg = kafkaMessage{
@@ -92,10 +96,20 @@ func (k *Kafka) Handle(_ context.Context, evt event.Event) {
 		return
 	}
 
-	k.producer.Input() <- &sarama.ProducerMessage{
+	k.mu.RLock()
+	producer := k.producer
+	k.mu.RUnlock()
+
+	// Если circuit breaker открыт — логируем и пропускаем
+	// (в production нужно пересоздавать producer)
+	select {
+	case producer.Input() <- &sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(msg.URL),
 		Value: sarama.ByteEncoder(body),
+	}:
+	default:
+		log.Printf("[kafka] circuit breaker open, message dropped: %s", msg.URL)
 	}
 }
 

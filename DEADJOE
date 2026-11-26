@@ -1,0 +1,44 @@
+
+*** These modified files were found in JOE when it aborted on Thu Nov 26 19:20:59 2026
+*** JOE was aborted by UNIX signal 1
+
+*** Файл '/home/lamnetu/www/ufa.ru/go/.git/COMMIT_EDITMSG'
+
+fix# Пожалуйста
+wq
+, введитеnwq:wq сообщение коммита для ваших изменений. Строки,
+# начинающиеся с «#» будут проигнорированы, а пустое сообщение
+# отменяет процесс коммита.
+#
+# Текущая ветка: main
+# Эта ветка соответствует «origin/main».
+#
+# Изменения, которые будут включены в коммит:
+#	новый файл:    .env.example
+#
+
+*** Файл '(БезИмени)'
+wq
+wq
+
+*** Файл '(БезИмени)'
+TRIGGER
+TRIGGER
+TRIGGER
+
+*** Файл '(БезИмени)'
+/home/lamnetu/www/red/agencies-core/.git/MERGE_MSG
+/home/lamnetu/www/red/agencies-core/.git/COMMIT_EDITMSG
+/home/lamnetu/www/red/agencies-core/.git/COMMIT_EDITMSG
+/home/lamnetu/www/red/agencies-core/.git/COMMIT_EDITMSG
+/home/lamnetu/www/red/ad/.git/COMMIT_EDITMSG
+/home/lamnetu/www/red/ad/.git/COMMIT_EDITMSG
+/home/lamnetu/www/red/ad/.git/COMMIT_EDITMSG
+/home/lamnetu/www/red/users-service/.git/COMMIT_EDITMSG
+/home/lamnetu/www/5087.ru/.git/COMMIT_EDITMSG
+/home/lamnetu/www/ufa.ru/go/.git/COMMIT_EDITMSG
+/home/lamnetu/www/ufa.ru/go/.git/COMMIT_EDITMSG
+
+*** Файл '* Startup Log *'
+Обработка '/etc/joe/editorrc'...Обработка '/etc/joe/ftyperc'...Finished processing /etc/joe/ftyperc
+Finished processing /etc/joe/editorrc

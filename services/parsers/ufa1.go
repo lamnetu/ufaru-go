@@ -18,17 +18,16 @@ const (
 	ufa1Timeout  = 15 * time.Second
 )
 
-// CSS-селекторы для ufa1.ru. При смене верстки правим здесь, код парсинга не меняется.
+// CSS-селекторы. При смене верстки правим здесь, код парсинга не меняется.
 const (
-	ufa1ItemSel        = "article.news-card"
-	ufa1TitleSel       = "h2.title a"
-	ufa1LinkSel        = "h2.title a"
-	ufa1DescriptionSel = "p.lead"
-	ufa1ImageSel       = "img.cover"
-	ufa1DateSel        = "time.published"
+    ufa1ItemSel        = "div.wrap_RL97A"
+    ufa1TitleSel       = "a.header_RL97A"
+    ufa1LinkSel        = "a.header_RL97A"
+    ufa1DescriptionSel = "span.subtitle_RL97A"
+    ufa1ImageSel       = "img.image_RL97A"
+    ufa1DateSel        = "span.text_Rd6P3[data-announcement-date]"
 )
 
-// Ufa1 — парсер сайта ufa1.ru.
 type Ufa1 struct {
 	collector *colly.Collector
 }
@@ -37,6 +36,7 @@ func NewUfa1() *Ufa1 {
 	c := colly.NewCollector(
 		colly.MaxDepth(1),
 		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"),
+		colly.AllowURLRevisit(),
 	)
 	c.SetRequestTimeout(ufa1Timeout)
 

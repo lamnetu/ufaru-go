@@ -33,6 +33,7 @@ func main() {
 	bus.Subscribe(&event.NewsParsedEvent{}, rest.Handle)
 	bus.Subscribe(&event.NewsParseFailedEvent{}, console.Handle)
 
+	log.Println("Start parsing")
 	svc := parsing.NewService(bus, parsers.NewUfa1(), parsers.NewPrufy())
 
 	go healthServer(getEnv("HEALTH_ADDR", ":8081"))
@@ -41,7 +42,7 @@ func main() {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	svc.Run(ctx) // первый проход сразу
+	svc.Run(ctx)
 
 	for {
 		select {

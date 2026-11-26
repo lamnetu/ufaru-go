@@ -17,7 +17,6 @@ const (
 	prufyTimeout  = 15 * time.Second
 )
 
-// CSS-селекторы prufy.ru — отличаются от ufa1, верстка своя.
 const (
 	prufyItemSel        = "div.news-item"
 	prufyTitleSel       = "a.news-title"
@@ -27,7 +26,6 @@ const (
 	prufyDateSel        = "span.news-date"
 )
 
-// Prufy — парсер сайта prufy.ru.
 type Prufy struct {
 	collector *colly.Collector
 }
@@ -36,6 +34,7 @@ func NewPrufy() *Prufy {
 	c := colly.NewCollector(
 		colly.MaxDepth(1),
 		colly.UserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"),
+		colly.AllowURLRevisit(),
 	)
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})

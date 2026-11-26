@@ -1,0 +1,11 @@
+services:
+    parser:
+        build:
+            context: .
+            target: builder # используем builder-стадию, где есть Go
+        volumes:
+            - .:/app
+        command: [ "go", "run", "./cmd/parser" ]
+        environment:
+            TZ: Europe/Moscow
+        restart: unless-stopped

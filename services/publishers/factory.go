@@ -5,7 +5,7 @@ import (
 
 	"github.com/lamnetu/ufaru-go/config"
 	"github.com/lamnetu/ufaru-go/event"
-	"github.com/lamnetu/ufaru-go/eventbus"
+	"github.com/lamnetu/ufaru-go/services/eventbus"
 )
 
 // Build — включает паблишеры по конфигу и подписывает их на шину.

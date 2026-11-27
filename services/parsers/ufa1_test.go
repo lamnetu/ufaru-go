@@ -13,7 +13,7 @@ import (
 func TestParser(t *testing.T) {
 	ctx := context.Background()
 
-	news, err := NewUfa1(2).ParseNewsList(ctx)
+	news, err := NewUfa1(1).ParseNewsList(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

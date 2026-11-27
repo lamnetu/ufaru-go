@@ -40,9 +40,10 @@ const (
 type Prufy struct {
 	collector       *colly.Collector
 	detailCollector *colly.Collector
+	maxItems        int
 }
 
-func NewPrufy() *Prufy {
+func NewPrufy(maxItems int) *Prufy {
 	c := colly.NewCollector(
 		colly.MaxDepth(1),
 		colly.UserAgent(userAgent),
@@ -51,7 +52,6 @@ func NewPrufy() *Prufy {
 	c.SetRequestTimeout(prufyTimeout)
 	_ = c.Limit(&colly.LimitRule{DomainGlob: "prufy.ru"})
 
-	// Bitrix composite cache — без этих заголовков страница придёт пустой.
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("BX-ACTION-TYPE", "get_dynamic")
 		r.Headers.Set("X-Bitrix-Composite", "get_dynamic")
@@ -71,6 +71,7 @@ func NewPrufy() *Prufy {
 	return &Prufy{
 		collector:       c,
 		detailCollector: dc,
+		maxItems:        maxItems,
 	}
 }
 

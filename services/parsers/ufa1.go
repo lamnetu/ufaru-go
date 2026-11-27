@@ -38,9 +38,10 @@ const (
 type Ufa1 struct {
 	collector       *colly.Collector
 	detailCollector *colly.Collector
+	countItems      int
 }
 
-func NewUfa1() *Ufa1 {
+func NewUfa1(countItems int) *Ufa1 {
 	c := colly.NewCollector(
 		colly.MaxDepth(1),
 		colly.UserAgent(userAgent),
@@ -59,6 +60,7 @@ func NewUfa1() *Ufa1 {
 	return &Ufa1{
 		collector:       c,
 		detailCollector: dc,
+		countItems:      countItems,
 	}
 }
 
@@ -71,6 +73,11 @@ func (p *Ufa1) ParseNewsList(ctx context.Context) ([]*domain.News, error) {
 	)
 
 	p.collector.OnHTML(ufa1ListSel, func(e *colly.HTMLElement) {
+
+		if len(news) >= p.countItems { // используем длину слайса, не глобальную переменную
+			return
+		}
+
 		title := strings.TrimSpace(e.ChildText(ufa1TitleSel))
 		if title == "" {
 			return

@@ -14,8 +14,6 @@ import (
 	"github.com/lamnetu/ufaru-go/services/ratelimiter"
 )
 
-// Run — композиционный корень: собирает зависимости и крутит цикл.
-// Все деферы живут здесь и отрабатывают при любом выходе.
 func Run(ctx context.Context, logger *slog.Logger) error {
 	cfg := config.Load()
 
@@ -32,7 +30,10 @@ func Run(ctx context.Context, logger *slog.Logger) error {
 		}
 	}()
 
-	svc := parsing.NewService(parsers.NewUfa1(), parsers.NewPrufy())
+	svc := parsing.NewService(
+		parsers.NewUfa1(40), // ← лимит на прогон (40 карточек на ленте)
+		parsers.NewPrufy(40),
+	)
 	hourly := ratelimiter.New(cfg.MaxPerHour, time.Hour)
 	daily := ratelimiter.New(cfg.MaxPerDay, 24*time.Hour)
 
@@ -70,7 +71,7 @@ func Run(ctx context.Context, logger *slog.Logger) error {
 		logger.Info("run finished", "news", len(res.News), "failures", len(res.Failures))
 	}
 
-	runOnce() // первый проход сразу
+	runOnce()
 
 	for {
 		select {

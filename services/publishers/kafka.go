@@ -4,26 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/lamnetu/ufaru-go/event"
 )
 
-// Kafka — publisher, отправляющий события в Kafka.
 type Kafka struct {
 	producer sarama.AsyncProducer
 	topic    string
 	topicErr string
-	mu       sync.RWMutex
 }
 
 func NewKafka(brokers []string, topic, topicErr string) (*Kafka, error) {
 	config := sarama.NewConfig()
 	config.Producer.RequiredAcks = sarama.WaitForLocal
 	config.Producer.Retry.Max = 3
-	config.Producer.Return.Successes = false
+	config.Producer.Return.Successes = true
+	config.Producer.Return.Errors = true
 
 	producer, err := sarama.NewAsyncProducer(brokers, config)
 	if err != nil {
@@ -36,10 +34,15 @@ func NewKafka(brokers []string, topic, topicErr string) (*Kafka, error) {
 		topicErr: topicErr,
 	}
 
-	// Фоновая горутина читает ошибки от producer'а
 	go func() {
 		for err := range producer.Errors() {
-			log.Printf("[kafka] producer error: %v", err.Err)
+			log.Printf("[kafka] error: %v", err.Err)
+		}
+	}()
+
+	go func() {
+		for range producer.Successes() {
+			// можно логировать доставки
 		}
 	}()
 
@@ -58,7 +61,7 @@ type kafkaMessage struct {
 	OccurredAt time.Time `json:"occurred_at"`
 }
 
-func (k *Kafka) Handle(_ context.Context, evt event.Event) {
+func (k *Kafka) Handle(ctx context.Context, evt event.Event) {
 	var msg kafkaMessage
 	var topic string
 
@@ -96,20 +99,14 @@ func (k *Kafka) Handle(_ context.Context, evt event.Event) {
 		return
 	}
 
-	k.mu.RLock()
-	producer := k.producer
-	k.mu.RUnlock()
-
-	// Если circuit breaker открыт — логируем и пропускаем
-	// (в production нужно пересоздавать producer)
 	select {
-	case producer.Input() <- &sarama.ProducerMessage{
+	case k.producer.Input() <- &sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.StringEncoder(msg.URL),
 		Value: sarama.ByteEncoder(body),
 	}:
-	default:
-		log.Printf("[kafka] circuit breaker open, message dropped: %s", msg.URL)
+	case <-ctx.Done():
+		log.Printf("[kafka] dropped (ctx): %s", msg.URL)
 	}
 }
 
